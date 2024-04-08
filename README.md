@@ -1,1 +1,1 @@
-# EnriCO: End-to-End Zero-shot Relation Extraction
+# EnriCo: End-to-End Zero-shot Relation Extraction
