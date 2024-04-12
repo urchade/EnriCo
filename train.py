@@ -7,7 +7,7 @@ from tqdm import tqdm
 from transformers import get_cosine_schedule_with_warmup
 
 # from model_nested import NerFilteredSemiCRF
-from model import GLiRel
+from model import EnriCo
 from modules.run_evaluation import get_for_all_path, sample_train_data
 from save_load import save_model, load_model
 import json
@@ -113,7 +113,7 @@ if __name__ == "__main__":
         model = load_model(config.prev_path)
         model.config = config
     else:
-        model = GLiRel(config)
+        model = EnriCo(config)
 
     if torch.cuda.is_available():
         model = model.cuda()
