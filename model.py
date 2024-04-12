@@ -11,7 +11,7 @@ from torch import nn
 from torch.nn.utils.rnn import pad_sequence
 
 
-class GLiRel(InstructBase, PyTorchModelHubMixin):
+class EnriCo(InstructBase, PyTorchModelHubMixin):
     def __init__(self, config):
         super().__init__(config)
 
