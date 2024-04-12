@@ -1,5 +1,5 @@
 import torch
-from model import GLiRel
+from model import EnriCo
 
 
 def save_model(current_model, path):
@@ -15,6 +15,6 @@ def load_model(path, model_name=None):
     if model_name is not None:
         config.model_name = model_name
 
-    loaded_model = GLiRel(config)
+    loaded_model = EnriCo(config)
     loaded_model.load_state_dict(dict_load["model_weights"])
     return loaded_model
