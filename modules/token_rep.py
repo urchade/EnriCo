@@ -7,9 +7,6 @@ from torch import nn
 from torch.nn.utils.rnn import pad_sequence
 
 
-# flair.cache_root = '/gpfswork/rech/pds/upa43yu/.cache'
-
-
 class TokenRepLayer(nn.Module):
     def __init__(self, model_name: str = "bert-base-cased", fine_tune: bool = True, subtoken_pooling: str = "first",
                  hidden_size: int = 768,

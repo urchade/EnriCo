@@ -1,7 +1,7 @@
 import torch
-import torch.nn.functional as F
 from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
+
 from .utils import down_weight_loss
 
 
@@ -30,7 +30,6 @@ class LstmSeq2SeqEncoder(nn.Module):
 
 
 def MLP(units, dropout, activation=nn.ReLU):
-
     # convert to integer
     units = [int(u) for u in units]
 

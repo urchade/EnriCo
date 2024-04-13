@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 
 import torch
@@ -6,22 +7,18 @@ import yaml
 from tqdm import tqdm
 from transformers import get_cosine_schedule_with_warmup
 
-# from model_nested import NerFilteredSemiCRF
 from model import EnriCo
 from modules.run_evaluation import get_for_all_path, sample_train_data
 from save_load import save_model, load_model
-import json
 
 
 # train function
 def train(model, optimizer, train_data, num_steps=1000, eval_every=100, log_dir="logs", warmup_ratio=0.1,
           train_batch_size=8, device='cuda'):
-
     model.train()
 
     # initialize data loaders
     train_loader = model.create_dataloader(train_data, batch_size=train_batch_size, shuffle=True)
-    # val_loader = model.create_dataloader(val_data, batch_size=val_batch_size, shuffle=False)
 
     pbar = tqdm(range(num_steps))
 

@@ -1,14 +1,15 @@
 import torch
 import torch.nn.functional as F
-from base import InstructBase
 from huggingface_hub import PyTorchModelHubMixin
+from torch import nn
+from torch.nn.utils.rnn import pad_sequence
+
+from base import InstructBase
 from modules.evaluator import Evaluator
-from modules.layers import FilteringLayer, RelationRep, RefineLayer, MLP, ScorerLayer, LstmSeq2SeqEncoder
+from modules.layers import FilteringLayer, RelationRep, RefineLayer, ScorerLayer, LstmSeq2SeqEncoder
 from modules.span_rep import SpanRepLayer
 from modules.token_rep import TokenRepLayer
 from modules.utils import get_ground_truth_relations, get_relations, get_relation_with_span, _get_candidates
-from torch import nn
-from torch.nn.utils.rnn import pad_sequence
 
 
 class EnriCo(InstructBase, PyTorchModelHubMixin):
@@ -58,21 +59,24 @@ class EnriCo(InstructBase, PyTorchModelHubMixin):
         # refine span representation
         if self.config.refine_span:
             self.refine_span = RefineLayer(
-                config.hidden_size, config.hidden_size // 64, num_layers=1, ffn_mul=config.ffn_mul, dropout=config.dropout,
+                config.hidden_size, config.hidden_size // 64, num_layers=1, ffn_mul=config.ffn_mul,
+                dropout=config.dropout,
                 read_only=True
             )
 
         # refine relation representation
         if self.config.refine_relation:
             self.refine_relation = RefineLayer(
-                config.hidden_size, config.hidden_size // 64, num_layers=1, ffn_mul=config.ffn_mul, dropout=config.dropout,
+                config.hidden_size, config.hidden_size // 64, num_layers=1, ffn_mul=config.ffn_mul,
+                dropout=config.dropout,
                 read_only=True
             )
 
         # refine prompt representation
         if self.config.refine_prompt:
             self.refine_prompt = RefineLayer(
-                config.hidden_size, config.hidden_size // 64, num_layers=2, ffn_mul=config.ffn_mul, dropout=config.dropout,
+                config.hidden_size, config.hidden_size // 64, num_layers=2, ffn_mul=config.ffn_mul,
+                dropout=config.dropout,
                 read_only=True
             )
 
@@ -367,7 +371,7 @@ class EnriCo(InstructBase, PyTorchModelHubMixin):
 
         # get_relation_type_rep
         relation_type_rep = word_rep_w_prompt[:, :prompt_relation_length - 1, :]
-        # extract [ENT] tokens (which are at even positions in relation_type_rep)
+        # extract [REL] tokens (which are at even positions in relation_type_rep)
         relation_type_rep = relation_type_rep[:, 0::2, :]
 
         relation_type_rep = self.prompt_rep_layer(relation_type_rep)  # (batch_size, len_types, hidden_size)

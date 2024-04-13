@@ -18,83 +18,6 @@ def create_projection_layer(hidden_size: int, dropout: float, out_dim: int = Non
     )
 
 
-class SpanQuery(nn.Module):
-
-    def __init__(self, hidden_size, max_width, trainable=True):
-        super().__init__()
-
-        self.query_seg = nn.Parameter(torch.randn(hidden_size, max_width))
-
-        nn.init.uniform_(self.query_seg, a=-1, b=1)
-
-        if not trainable:
-            self.query_seg.requires_grad = False
-
-        self.project = nn.Sequential(
-            nn.Linear(hidden_size, hidden_size),
-            nn.ReLU()
-        )
-
-    def forward(self, h, *args):
-        # h of shape [B, L, D]
-        # query_seg of shape [D, max_width]
-
-        span_rep = torch.einsum('bld, ds->blsd', h, self.query_seg)
-
-        return self.project(span_rep)
-
-
-class SpanMLP(nn.Module):
-
-    def __init__(self, hidden_size, max_width):
-        super().__init__()
-
-        self.mlp = nn.Linear(hidden_size, hidden_size * max_width)
-
-    def forward(self, h, *args):
-        # h of shape [B, L, D]
-        # query_seg of shape [D, max_width]
-
-        B, L, D = h.size()
-
-        span_rep = self.mlp(h)
-
-        span_rep = span_rep.view(B, L, -1, D)
-
-        return span_rep.relu()
-
-
-class SpanCAT(nn.Module):
-
-    def __init__(self, hidden_size, max_width):
-        super().__init__()
-
-        self.max_width = max_width
-
-        self.query_seg = nn.Parameter(torch.randn(128, max_width))
-
-        self.project = nn.Sequential(
-            nn.Linear(hidden_size + 128, hidden_size),
-            nn.ReLU()
-        )
-
-    def forward(self, h, *args):
-        # h of shape [B, L, D]
-        # query_seg of shape [D, max_width]
-
-        B, L, D = h.size()
-
-        h = h.view(B, L, 1, D).repeat(1, 1, self.max_width, 1)
-
-        q = self.query_seg.view(1, 1, self.max_width, -1).repeat(B, L, 1, 1)
-
-        span_rep = torch.cat([h, q], dim=-1)
-
-        span_rep = self.project(span_rep)
-
-        return span_rep
-
-
 class SpanConvBlock(nn.Module):
     def __init__(self, hidden_size, kernel_size, span_mode='conv_normal'):
         super().__init__()
@@ -157,28 +80,6 @@ class SpanConv(nn.Module):
         span_reps = torch.stack(span_reps, dim=-2)
 
         return self.project(span_reps)
-
-
-class SpanEndpointsBlock(nn.Module):
-    def __init__(self, kernel_size):
-        super().__init__()
-
-        self.kernel_size = kernel_size
-
-    def forward(self, x):
-        B, L, D = x.size()
-
-        span_idx = torch.LongTensor(
-            [[i, i + self.kernel_size - 1] for i in range(L)]).to(x.device)
-
-        x = F.pad(x, (0, 0, 0, self.kernel_size - 1), "constant", 0)
-
-        # endrep
-        start_end_rep = torch.index_select(x, dim=1, index=span_idx.view(-1))
-
-        start_end_rep = start_end_rep.view(B, L, 2, D)
-
-        return start_end_rep
 
 
 class ConvShare(nn.Module):
@@ -300,35 +201,6 @@ class SpanMarkerV0(nn.Module):
         return self.out_project(cat).view(B, L, self.max_width, D)
 
 
-class ConvShareV2(nn.Module):
-    def __init__(self, hidden_size, max_width):
-        super().__init__()
-
-        self.max_width = max_width
-
-        self.conv_weight = nn.Parameter(
-            torch.randn(hidden_size, hidden_size, max_width)
-        )
-
-        nn.init.xavier_normal_(self.conv_weight)
-
-    def forward(self, x, *args):
-        span_reps = []
-
-        x = torch.einsum('bld->bdl', x)
-
-        for i in range(self.max_width):
-            pad = i
-            x_i = F.pad(x, (0, pad), "constant", 0)
-            conv_w = self.conv_weight[:, :, :i + 1]
-            out_i = F.conv1d(x_i, conv_w)
-            span_reps.append(out_i.transpose(-1, -2))
-
-        out = torch.stack(span_reps, dim=-2)
-
-        return out
-
-
 class SpanRepLayer(nn.Module):
     """
     Various span representation approaches
@@ -341,13 +213,6 @@ class SpanRepLayer(nn.Module):
             self.span_rep_layer = SpanMarker(hidden_size, max_width, **kwargs)
         elif span_mode == 'markerV0':
             self.span_rep_layer = SpanMarkerV0(hidden_size, max_width, **kwargs)
-        elif span_mode == 'query':
-            self.span_rep_layer = SpanQuery(
-                hidden_size, max_width, trainable=True)
-        elif span_mode == 'mlp':
-            self.span_rep_layer = SpanMLP(hidden_size, max_width)
-        elif span_mode == 'cat':
-            self.span_rep_layer = SpanCAT(hidden_size, max_width)
         elif span_mode == 'conv_conv':
             self.span_rep_layer = SpanConv(
                 hidden_size, max_width, span_mode='conv_conv')
