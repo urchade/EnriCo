@@ -1,6 +1,12 @@
+import argparse
+import json
+from pathlib import Path
+from typing import Dict, Optional, Union
+
 import torch
 import torch.nn.functional as F
-from huggingface_hub import PyTorchModelHubMixin
+import yaml
+from huggingface_hub import PyTorchModelHubMixin, hf_hub_download
 from torch import nn
 from torch.nn.utils.rnn import pad_sequence
 
@@ -408,8 +414,114 @@ class EnriCo(InstructBase, PyTorchModelHubMixin):
         out, f1 = evaluator.evaluate()
         return out, f1
 
+    def save_pretrained(
+            self,
+            save_directory: Union[str, Path],
+            *,
+            config: Optional[Union[dict, "DataclassInstance"]] = None,
+            repo_id: Optional[str] = None,
+            push_to_hub: bool = False,
+            **push_to_hub_kwargs,
+    ) -> Optional[str]:
+        """
+        Save weights in local directory.
+
+        Args:
+            save_directory (`str` or `Path`):
+                Path to directory in which the model weights and configuration will be saved.
+            config (`dict` or `DataclassInstance`, *optional*):
+                Model configuration specified as a key/value dictionary or a dataclass instance.
+            push_to_hub (`bool`, *optional*, defaults to `False`):
+                Whether or not to push your model to the Huggingface Hub after saving it.
+            repo_id (`str`, *optional*):
+                ID of your repository on the Hub. Used only if `push_to_hub=True`. Will default to the folder name if
+                not provided.
+            kwargs:
+                Additional key word arguments passed along to the [`~ModelHubMixin.push_to_hub`] method.
+        """
+        save_directory = Path(save_directory)
+        save_directory.mkdir(parents=True, exist_ok=True)
+
+        # save model weights/files
+        torch.save(self.state_dict(), save_directory / "pytorch_model.bin")
+
+        # save config (if provided)
+        if config is None:
+            config = self.config
+        if config is not None:
+            if isinstance(config, argparse.Namespace):
+                config = vars(config)
+            (save_directory / "config.json").write_text(json.dumps(config, indent=2))
+
+        # push to the Hub if required
+        if push_to_hub:
+            kwargs = push_to_hub_kwargs.copy()  # soft-copy to avoid mutating input
+            if config is not None:  # kwarg for `push_to_hub`
+                kwargs["config"] = config
+            if repo_id is None:
+                repo_id = save_directory.name  # Defaults to `save_directory` name
+            return self.push_to_hub(repo_id=repo_id, **kwargs)
+        return None
+
+    @classmethod
+    def _from_pretrained(
+            cls,
+            *,
+            model_id: str,
+            revision: Optional[str],
+            cache_dir: Optional[Union[str, Path]],
+            force_download: bool,
+            proxies: Optional[Dict],
+            resume_download: bool,
+            local_files_only: bool,
+            token: Union[str, bool, None],
+            map_location: str = "cpu",
+            strict: bool = False,
+            **model_kwargs,
+    ):
+
+        # 2. Newer format: Use "pytorch_model.bin" and "gliner_config.json"
+        model_file = Path(model_id) / "pytorch_model.bin"
+        if not model_file.exists():
+            model_file = hf_hub_download(
+                repo_id=model_id,
+                filename="pytorch_model.bin",
+                revision=revision,
+                cache_dir=cache_dir,
+                force_download=force_download,
+                proxies=proxies,
+                resume_download=resume_download,
+                token=token,
+                local_files_only=local_files_only,
+            )
+        config_file = Path(model_id) / "config.json"
+        if not config_file.exists():
+            config_file = hf_hub_download(
+                repo_id=model_id,
+                filename="config.json",
+                revision=revision,
+                cache_dir=cache_dir,
+                force_download=force_download,
+                proxies=proxies,
+                resume_download=resume_download,
+                token=token,
+                local_files_only=local_files_only,
+            )
+        config = load_config_as_namespace(config_file)
+        model = cls(config)
+        state_dict = torch.load(model_file, map_location=torch.device(map_location))
+        model.load_state_dict(state_dict, strict=strict, assign=True)
+        model.to(map_location)
+        return model
+
     def to(self, device):
         super().to(device)
         import flair
         flair.device = device
         return self
+
+
+def load_config_as_namespace(config_file):
+    with open(config_file, 'r') as f:
+        config_dict = yaml.safe_load(f)
+    return argparse.Namespace(**config_dict)
