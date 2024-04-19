@@ -182,16 +182,20 @@ class ScorerLayer(nn.Module):
 
         if scoring_type == "concat_proj":
             self.proj = MLP([hidden_size * 4, hidden_size * 4, 1], dropout)
-        if scoring_type == "dot_thresh":
+        elif scoring_type == "dot_thresh":
             self.proj_thresh = MLP([hidden_size, hidden_size * 4, 2], dropout)
             self.proj_type = MLP([hidden_size, hidden_size * 4, hidden_size], dropout)
+        elif scoring_type == "dot_norm":
+            self.dy_bias_type = MLP([hidden_size, hidden_size * 4, 1], dropout)
+            self.dy_bias_rel = MLP([hidden_size, hidden_size * 4, 1], dropout)
+            self.bias = nn.Parameter(torch.tensor(-10.0))
 
     def forward(self, candidate_pair_rep, rel_type_rep):
         # candidate_pair_rep: [B, N, D]
         # rel_type_rep: [B, T, D]
         if self.scoring_type == "dot":
             return torch.einsum("bnd,btd->bnt", candidate_pair_rep, rel_type_rep)
-        
+
         elif self.scoring_type == "dot_thresh":
             # compute the scaling factor and threshold
             B, T, D = rel_type_rep.size()
@@ -204,6 +208,12 @@ class ScorerLayer(nn.Module):
             # compute the score (before sigmoid)
             score = torch.einsum("bnd,btd->bnt", candidate_pair_rep, rel_type_rep)  # [B, N, T]
             return (score + beta) * alpha  # [B, N, T]
+
+        elif self.scoring_type == "dot_norm":
+            score = torch.einsum("bnd,btd->bnt", candidate_pair_rep, rel_type_rep)  # [B, N, T]
+            bias_1 = self.dy_bias_type(rel_type_rep).transpose(1, 2)  # [B, 1, T]
+            bias_2 = self.dy_bias_rel(candidate_pair_rep)  # [B, N, 1]
+            return score + self.bias + bias_1 + bias_2
 
         elif self.scoring_type == "concat_proj":
             prod_features = candidate_pair_rep.unsqueeze(2) * rel_type_rep.unsqueeze(1)  # [B, N, T, D]
