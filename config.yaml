@@ -1,0 +1,49 @@
+# Model Configuration
+model_name: microsoft/deberta-v3-base
+hidden_size: 512
+ffn_mul: 2
+span_mode: markerV0
+dropout: 0.1
+max_width: 8
+max_top_k: 54
+add_top_k: 10
+
+# Learning Rate Settings
+lr_encoder: 1e-5
+lr_others: 5e-5
+freeze_token_rep: false
+
+# Training Parameters
+num_steps: 60000
+warmup_ratio: 1000
+train_batch_size: 12
+eval_every: 5000
+max_neg_type_ratio: 1
+size_sup: -1
+max_len: 384
+max_types: 20
+shuffle_types: true
+random_drop: true
+
+# Architecture
+refine_span: false
+refine_relation: false
+refine_prompt: true
+scorer: "dot"
+
+# Flair configuration
+fine_tune: true
+subtoken_pooling: first
+
+# Pretrained Model Configuration
+prev_path: "none" # "none" if no pretrained model
+
+# Directory Paths
+root_dir: z_v2_minipile
+train_data: "relation.json"
+
+# Hardware Configuration
+gpu: "pds@v100"
+run_time: "10:00:00"
+
+# python create_job.py --config config.yaml
